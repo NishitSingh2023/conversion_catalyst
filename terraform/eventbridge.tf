@@ -19,11 +19,24 @@ resource "aws_cloudwatch_event_target" "nightly_assignment" {
   })
 }
 
-# Weekly training schedule. Target wiring for the training job (SageMaker/Fargate)
-# is added in the training task; the rule is defined here so the schedule exists.
+# Weekly retraining. Runs on the same image as the pipeline stages so training
+# and serving share one copy of the feature code.
 resource "aws_cloudwatch_event_rule" "weekly_training" {
   name                = "${local.name_prefix}-weekly-training"
   description         = "Weekly model retraining trigger."
   schedule_expression = var.training_schedule
   tags                = local.common_tags
+}
+
+resource "aws_cloudwatch_event_target" "weekly_training" {
+  rule = aws_cloudwatch_event_rule.weekly_training.name
+  arn  = module.lambda_train.function_arn
+}
+
+resource "aws_lambda_permission" "weekly_training" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = module.lambda_train.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.weekly_training.arn
 }

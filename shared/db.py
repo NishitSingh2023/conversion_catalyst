@@ -55,12 +55,36 @@ def read_sql(query: str, params: dict | None = None) -> pd.DataFrame:
         return pd.read_sql(text(query), conn, params=params or {})
 
 
-def write_dataframe(df: pd.DataFrame, table: str, if_exists: str = "append") -> int:
-    """Bulk-insert a DataFrame into a table. Returns the number of rows written."""
+# Rows per INSERT statement. Unbounded `method="multi"` builds a single
+# statement covering every row: measured at 1.0GB resident memory and 24s for
+# 225k rows, and Postgres also caps a statement at 65535 bind parameters.
+# Chunking keeps memory flat and stays well inside that ceiling.
+WRITE_CHUNK_SIZE = 5_000
+
+
+def write_dataframe(
+    df: pd.DataFrame,
+    table: str,
+    if_exists: str = "append",
+    chunksize: int = WRITE_CHUNK_SIZE,
+) -> int:
+    """Bulk-insert a DataFrame into a table. Returns the number of rows written.
+
+    Note ``if_exists="append"`` will create a missing table with pandas-inferred
+    types and no constraints. Tables are expected to already exist via
+    db_migrations/; prefer running migrations over relying on auto-creation.
+    """
     if df.empty:
         return 0
     with get_engine().begin() as conn:
-        df.to_sql(table, conn, if_exists=if_exists, index=False, method="multi")
+        df.to_sql(
+            table,
+            conn,
+            if_exists=if_exists,
+            index=False,
+            method="multi",
+            chunksize=chunksize,
+        )
     return len(df)
 
 

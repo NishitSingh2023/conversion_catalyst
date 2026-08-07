@@ -46,3 +46,4 @@ data/sample/
 .idea/
 .vscode/
 *.swp
+semantic-review/

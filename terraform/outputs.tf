@@ -29,7 +29,7 @@ output "state_machine_arn" {
 }
 
 output "lambda_function_names" {
-  description = "Names of the pipeline Lambdas."
+  description = "Names of the pipeline and operational Lambdas."
   value = {
     ingest      = module.lambda_ingest.function_name
     eligibility = module.lambda_eligibility.function_name
@@ -37,5 +37,17 @@ output "lambda_function_names" {
     optimizer   = module.lambda_optimizer.function_name
     pool        = module.lambda_pool.function_name
     lsq_push    = module.lambda_lsq_push.function_name
+    migrate     = module.lambda_migrate.function_name
+    train       = module.lambda_train.function_name
   }
+}
+
+output "ecr_repository_url" {
+  description = "Push the pipeline image here (see scripts/build_and_push.sh)."
+  value       = aws_ecr_repository.pipeline.repository_url
+}
+
+output "migrate_command" {
+  description = "Run this once after apply to create the schema in private RDS."
+  value       = "aws lambda invoke --function-name ${module.lambda_migrate.function_name} --region ${var.aws_region} /dev/stdout"
 }

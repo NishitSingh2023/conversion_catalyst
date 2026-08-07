@@ -1,0 +1,11 @@
+.venv/
+.git/
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+terraform/
+models/
+data/sample/
+semantic-review/
+tests/
+*.md

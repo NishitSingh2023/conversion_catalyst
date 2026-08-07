@@ -7,16 +7,22 @@ locals {
 
   azs = slice(data.aws_availability_zones.available.names, 0, var.az_count)
 
-  # Two private subnets (RDS + Lambda ENIs) derived from the VPC CIDR.
+  # Private subnets (RDS + Lambda ENIs) plus, when egress is enabled, public
+  # subnets that host the NAT gateway.
   private_subnet_cidrs = [for i in range(var.az_count) : cidrsubnet(var.vpc_cidr, 8, i)]
+  public_subnet_cidrs  = [for i in range(var.az_count) : cidrsubnet(var.vpc_cidr, 8, i + 100)]
 
   common_tags = {
     Project     = var.project_name
     Environment = var.environment
   }
 
-  # Environment variables shared by every Lambda so they can reach Postgres,
-  # S3 and Secrets Manager without hardcoded config.
+  # Shared by every Lambda so they can reach Postgres, S3 and Secrets Manager
+  # without hardcoded configuration.
+  #
+  # AWS_REGION is deliberately absent: Lambda reserves that key and rejects any
+  # function whose configuration sets it. The runtime injects it, and
+  # shared/config.py already reads it with a fallback.
   lambda_env = {
     ENVIRONMENT      = var.environment
     DB_SECRET_ARN    = aws_secretsmanager_secret.db.arn
@@ -26,6 +32,5 @@ locals {
     DB_NAME          = var.db_name
     MODEL_BUCKET     = aws_s3_bucket.models.bucket
     LSQ_API_BASE_URL = var.lsq_api_base_url
-    AWS_REGION       = var.aws_region
   }
 }

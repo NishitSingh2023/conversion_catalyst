@@ -52,16 +52,21 @@ variable "db_allocated_storage" {
   default     = 20
 }
 
-variable "lambda_layer_zip" {
-  description = "Path to the pre-built Python dependency layer zip (built by scripts/build_layer.sh)."
+variable "image_tag" {
+  description = "Tag of the pipeline container image in ECR (built by scripts/build_and_push.sh)."
   type        = string
-  default     = "build/python-deps-layer.zip"
+  default     = "latest"
 }
 
-variable "shared_layer_dir" {
-  description = "Directory containing the shared/ library packaged for a Lambda layer."
-  type        = string
-  default     = "build/shared-layer"
+variable "enable_nat_gateway" {
+  description = <<-DESC
+    Provision a NAT gateway so the lsq_push stage can reach the real LSQ API.
+    Leave false while using the mock endpoint to avoid the hourly charge; set
+    true before pointing lsq_api_base_url at a live sandbox, otherwise the push
+    hangs until timeout.
+  DESC
+  type        = bool
+  default     = false
 }
 
 variable "lsq_api_base_url" {

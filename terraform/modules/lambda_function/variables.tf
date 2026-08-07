@@ -1,5 +1,5 @@
 variable "name" {
-  description = "Function name suffix (prefixed with the project/environment)."
+  description = "Function name suffix (prefixed with project + environment)."
   type        = string
 }
 
@@ -8,20 +8,14 @@ variable "name_prefix" {
   type        = string
 }
 
-variable "source_dir" {
-  description = "Directory containing the Lambda handler source to zip."
+variable "image_uri" {
+  description = "ECR image URI (including tag) that all stages share."
   type        = string
 }
 
 variable "handler" {
-  description = "Lambda handler entrypoint, e.g. handler.lambda_handler."
+  description = "Dotted path to the handler, passed as the image CMD override."
   type        = string
-}
-
-variable "runtime" {
-  description = "Lambda runtime."
-  type        = string
-  default     = "python3.11"
 }
 
 variable "timeout" {
@@ -39,12 +33,6 @@ variable "memory_size" {
 variable "role_arn" {
   description = "IAM role ARN the function assumes."
   type        = string
-}
-
-variable "layer_arns" {
-  description = "Lambda layer ARNs to attach (shared deps + code)."
-  type        = list(string)
-  default     = []
 }
 
 variable "environment" {

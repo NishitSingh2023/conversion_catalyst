@@ -87,10 +87,21 @@ resource "aws_sfn_state_machine" "assignment" {
 }
 
 locals {
-  # Shared retry policy: back off on throttles and transient errors.
+  # Retry only genuinely transient infrastructure faults.
+  #
+  # States.TaskFailed was previously included, which retried deterministic
+  # business errors ("batch has no valid leads", a missing handler module) three
+  # times with backoff. Those never succeed on retry and each attempt left
+  # another failed row in pipeline_runs.
   sfn_retry = [
     {
-      ErrorEquals     = ["Lambda.ServiceException", "Lambda.TooManyRequestsException", "States.TaskFailed"]
+      ErrorEquals = [
+        "Lambda.ServiceException",
+        "Lambda.AWSLambdaException",
+        "Lambda.SdkClientException",
+        "Lambda.TooManyRequestsException",
+        "Lambda.Unknown",
+      ]
       IntervalSeconds = 5
       MaxAttempts     = 3
       BackoffRate     = 2.0

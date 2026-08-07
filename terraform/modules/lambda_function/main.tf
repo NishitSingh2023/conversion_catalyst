@@ -4,31 +4,25 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
-    archive = {
-      source  = "hashicorp/archive"
-      version = ">= 2.4"
-    }
   }
 }
 
-# Package only the handler source for this function. Heavy dependencies and the
-# shared/ library are delivered via Lambda layers, keeping each function zip tiny.
-data "archive_file" "this" {
-  type        = "zip"
-  source_dir  = var.source_dir
-  output_path = "${path.root}/build/${var.name}.zip"
-}
-
+# Container-image packaging. Zip packaging caps code + layers at 250MB unzipped;
+# this project's dependencies are ~820MB (xgboost alone 417MB) and even the
+# optimizer, which loads no model, reaches 249MB from scipy/pandas/numpy. Images
+# raise the ceiling to 10GB. All stages share one image and select their
+# entrypoint through image_config.command, so they cannot drift apart.
 resource "aws_lambda_function" "this" {
-  function_name    = "${var.name_prefix}-${var.name}"
-  role             = var.role_arn
-  handler          = var.handler
-  runtime          = var.runtime
-  timeout          = var.timeout
-  memory_size      = var.memory_size
-  filename         = data.archive_file.this.output_path
-  source_code_hash = data.archive_file.this.output_base64sha256
-  layers           = var.layer_arns
+  function_name = "${var.name_prefix}-${var.name}"
+  role          = var.role_arn
+  package_type  = "Image"
+  image_uri     = var.image_uri
+  timeout       = var.timeout
+  memory_size   = var.memory_size
+
+  image_config {
+    command = [var.handler]
+  }
 
   environment {
     variables = var.environment
