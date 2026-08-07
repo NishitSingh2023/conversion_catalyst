@@ -6,9 +6,9 @@ this module rather than constructing their own engines.
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
-from typing import Iterator
 
 import pandas as pd
 from sqlalchemy import Engine, create_engine, text
