@@ -6,6 +6,38 @@ leads per manager, with overflow routed to a claimable pool.
 
 See [PLAN.md](./PLAN.md) for the full design and task breakdown.
 
+## Quick start
+
+Requires **Python 3.11+** and **Docker** (with the Compose plugin).
+
+```bash
+# 1. Clone
+git clone git@github.com:NishitSingh2023/lead_allocation.git
+cd lead_allocation
+
+# 2. Virtualenv + dependencies (runtime + dev/test/dashboard tooling)
+python -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements-dev.txt
+
+# 3. Start Postgres (host port 5433 to avoid clashing with a local 5432)
+docker compose up -d postgres
+export DB_PORT=5433
+
+# 4. Schema + sample data
+python scripts/apply_migrations.py
+python data/generate_sample_data.py
+python scripts/load_sample_data.py
+
+# 5. Train an initial model (writes to models/ and activates it)
+ENVIRONMENT=local python training/train.py
+
+# 6. Run the test suite
+pytest
+```
+
+Runtime-only install (no test/dashboard tooling): `pip install -r requirements.txt`.
+
 ## Pipeline
 
 ```
