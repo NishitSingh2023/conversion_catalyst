@@ -12,8 +12,8 @@ Requires **Python 3.11+** and **Docker** (with the Compose plugin).
 
 ```bash
 # 1. Clone
-git clone git@github.com:NishitSingh2023/lead_allocation.git
-cd lead_allocation
+git clone git@github.com:NishitSingh2023/conversion_catalyst.git
+cd conversion_catalyst
 
 # 2. Virtualenv + dependencies (runtime + dev/test/dashboard tooling)
 python -m venv .venv && source .venv/bin/activate
