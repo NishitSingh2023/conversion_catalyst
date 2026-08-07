@@ -23,13 +23,8 @@ LAMBDAS_TF = REPO_ROOT / "terraform" / "lambdas.tf"
 # Stages declared in Terraform whose handler is not written yet. Each entry is a
 # deliberate acknowledgement that the stack cannot be deployed end to end until
 # it is implemented. Remove an entry when its handler lands - the test will then
-# enforce it forever.
-PENDING_HANDLERS = {
-    "lambdas.scoring.handler.lambda_handler",
-    "lambdas.optimizer.handler.lambda_handler",
-    "lambdas.pool.handler.lambda_handler",
-    "lambdas.lsq_push.handler.lambda_handler",
-}
+# enforce it forever. All pipeline stages are now implemented.
+PENDING_HANDLERS: set[str] = set()
 
 
 def terraform_handlers() -> list[str]:

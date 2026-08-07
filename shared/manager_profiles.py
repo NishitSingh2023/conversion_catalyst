@@ -40,6 +40,21 @@ def _conv_rate(df: pd.DataFrame) -> float:
     return float(df["converted"].mean())
 
 
+def _modal_name(grp: pd.DataFrame) -> str | None:
+    """Most frequent non-null manager_name in the group, if the column exists.
+
+    History rows can disagree on a manager's name (whitespace, the odd typo), so
+    the profile takes the majority spelling. Absent entirely (e.g. synthetic
+    fixtures with no name column) it falls back to None and callers use the id.
+    """
+    if "manager_name" not in grp.columns:
+        return None
+    names = grp["manager_name"].dropna()
+    if names.empty:
+        return None
+    return str(names.mode().iloc[0])
+
+
 def derive_profiles(
     history: pd.DataFrame,
     as_of: date | None = None,
@@ -69,9 +84,9 @@ def derive_profiles(
     if history.empty:
         return pd.DataFrame(
             columns=[
-                "manager_id", "languages_handled", "geographies_handled",
-                "products_handled", "conv_rate_overall", "conv_rate_H",
-                "conv_rate_M", "conv_rate_L", "avg_response_mins",
+                "manager_id", "manager_name", "languages_handled",
+                "geographies_handled", "products_handled", "conv_rate_overall",
+                "conv_rate_H", "conv_rate_M", "conv_rate_L", "avg_response_mins",
                 "total_leads_handled", "last_active_date", "derived_active_flag",
             ]
         )
@@ -88,6 +103,7 @@ def derive_profiles(
         rows.append(
             {
                 "manager_id": manager_id,
+                "manager_name": _modal_name(grp),
                 "languages_handled": _covered_values(grp["lead_language"], min_coverage_support),
                 "geographies_handled": _covered_values(grp["lead_geography"], min_coverage_support),
                 "products_handled": _covered_values(grp["lead_product"], min_coverage_support),
@@ -109,24 +125,26 @@ def derive_profiles(
 # Persistence helpers (DB-touching; kept separate from the pure aggregation).
 # ---------------------------------------------------------------------------
 _HISTORY_QUERY = """
-SELECT manager_id, lead_intent_bucket, lead_language, lead_geography,
-       lead_product, first_response_mins, converted, interaction_date
+SELECT manager_id, manager_name, lead_intent_bucket, lead_language,
+       lead_geography, lead_product, first_response_mins, converted,
+       interaction_date
 FROM lead_manager_history
 """
 
 _UPSERT = """
 INSERT INTO manager_profiles (
-    manager_id, languages_handled, geographies_handled, products_handled,
-    conv_rate_overall, conv_rate_H, conv_rate_M, conv_rate_L,
+    manager_id, manager_name, languages_handled, geographies_handled,
+    products_handled, conv_rate_overall, conv_rate_H, conv_rate_M, conv_rate_L,
     avg_response_mins, total_leads_handled, last_active_date,
     derived_active_flag, refreshed_at
 ) VALUES (
-    :manager_id, :languages_handled, :geographies_handled, :products_handled,
-    :conv_rate_overall, :conv_rate_H, :conv_rate_M, :conv_rate_L,
-    :avg_response_mins, :total_leads_handled, :last_active_date,
+    :manager_id, :manager_name, :languages_handled, :geographies_handled,
+    :products_handled, :conv_rate_overall, :conv_rate_H, :conv_rate_M,
+    :conv_rate_L, :avg_response_mins, :total_leads_handled, :last_active_date,
     :derived_active_flag, now()
 )
 ON CONFLICT (manager_id) DO UPDATE SET
+    manager_name        = EXCLUDED.manager_name,
     languages_handled   = EXCLUDED.languages_handled,
     geographies_handled = EXCLUDED.geographies_handled,
     products_handled    = EXCLUDED.products_handled,

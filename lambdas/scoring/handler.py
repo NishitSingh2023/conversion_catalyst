@@ -24,6 +24,7 @@ import os
 import pandas as pd
 from sqlalchemy import text
 
+from shared.constants import MANAGER_NUMERIC_FEATURES
 from shared.db import get_engine, read_sql, write_dataframe
 from shared.features import align_features, build_features
 from shared.model_io import get_active_model, load_artifact
@@ -31,6 +32,23 @@ from shared.pipeline import fail_run, update_run
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+
+def _restore_feature_case(profiles):
+    """Undo Postgres's lower-casing of the mixed-case profile columns.
+
+    The ``manager_profiles`` DDL declares ``conv_rate_H``/``_M``/``_L`` unquoted,
+    so Postgres stores them lower-cased and ``SELECT *`` returns ``conv_rate_h``
+    etc. ``build_features`` (shared with training, which builds profiles in
+    memory) expects the exact ``MANAGER_NUMERIC_FEATURES`` spelling, so map the
+    lower-cased names back before feature building.
+    """
+    rename = {
+        col.lower(): col
+        for col in MANAGER_NUMERIC_FEATURES
+        if col.lower() != col and col.lower() in profiles.columns
+    }
+    return profiles.rename(columns=rename) if rename else profiles
 
 # Eligible pairs scored per chunk. Keeps the feature matrix bounded irrespective
 # of how large the eligible set is.
@@ -109,7 +127,7 @@ def lambda_handler(event: dict | None = None, context=None) -> dict:
 
         artifact = load_artifact(active["s3_path"])
         feature_columns = artifact.feature_columns
-        profiles = read_sql("SELECT * FROM manager_profiles")
+        profiles = _restore_feature_case(read_sql("SELECT * FROM manager_profiles"))
 
         # Clear any prior scores for an idempotent re-run.
         with get_engine().begin() as conn:

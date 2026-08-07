@@ -1,12 +1,17 @@
 #!/usr/bin/env python
-"""Load generated sample CSVs into Postgres.
+"""Load sample CSVs into Postgres.
 
-Reads data/sample/lead_manager_history.csv and data/sample/new_leads.csv and
-loads them into the corresponding tables. Existing rows for the same batch /
-whole history are cleared first so the loader is idempotent for demos.
+Reads a history CSV and a new-leads CSV and loads them into
+``lead_manager_history`` and ``new_leads``. Existing rows for the same batch /
+the whole history are cleared first so the loader is idempotent for demos.
 
-The same loader accepts the team-provided dataset: just drop CSVs with the same
-column headers into data/sample/ (or pass --history-csv / --leads-csv).
+Two input formats are accepted and auto-detected per file:
+  * the real team dataset (``lead_rep_dataset.csv`` / ``leads_dataset_HML.csv``),
+    which is mapped and normalised onto the canonical schema via
+    ``data.adapt_real_data``; and
+  * an already-canonical CSV whose headers match the table columns.
+
+Defaults point at the real dataset filenames.
 
 Usage:
     python scripts/load_sample_data.py
@@ -25,9 +30,17 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from sqlalchemy import text  # noqa: E402
 
+from data.adapt_real_data import (  # noqa: E402
+    adapt_history,
+    adapt_new_leads,
+    is_real_history,
+    is_real_new_leads,
+)
 from shared.db import get_engine, write_dataframe  # noqa: E402
 
 SAMPLE_DIR = REPO_ROOT / "data" / "sample"
+DEFAULT_HISTORY_CSV = SAMPLE_DIR / "lead_rep_dataset.csv"
+DEFAULT_LEADS_CSV = SAMPLE_DIR / "leads_dataset_HML.csv"
 
 
 def _to_bool(series: pd.Series) -> pd.Series:
@@ -35,15 +48,22 @@ def _to_bool(series: pd.Series) -> pd.Series:
 
 
 def load_history(csv_path: Path) -> int:
-    df = pd.read_csv(csv_path)
-    df["converted"] = _to_bool(df["converted"])
+    df = pd.read_csv(csv_path, low_memory=False)
+    if is_real_history(df):
+        print(f"  detected real dataset format in {csv_path.name}; adapting")
+        df = adapt_history(df)
+    else:
+        df["converted"] = _to_bool(df["converted"])
     with get_engine().begin() as conn:
         conn.execute(text("TRUNCATE lead_manager_history RESTART IDENTITY"))
     return write_dataframe(df, "lead_manager_history")
 
 
 def load_new_leads(csv_path: Path) -> int:
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, low_memory=False)
+    if is_real_new_leads(df):
+        print(f"  detected real dataset format in {csv_path.name}; adapting")
+        df = adapt_new_leads(df)
     batch_ids = df["batch_id"].dropna().unique().tolist()
     with get_engine().begin() as conn:
         if batch_ids:
@@ -56,8 +76,8 @@ def load_new_leads(csv_path: Path) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--history-csv", default=str(SAMPLE_DIR / "lead_manager_history.csv"))
-    parser.add_argument("--leads-csv", default=str(SAMPLE_DIR / "new_leads.csv"))
+    parser.add_argument("--history-csv", default=str(DEFAULT_HISTORY_CSV))
+    parser.add_argument("--leads-csv", default=str(DEFAULT_LEADS_CSV))
     args = parser.parse_args()
 
     n_hist = load_history(Path(args.history_csv))
