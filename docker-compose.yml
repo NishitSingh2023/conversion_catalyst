@@ -1,0 +1,24 @@
+# Local development Postgres so the whole pipeline can run without AWS.
+# Mirrors the RDS instance defined in terraform/.
+services:
+  postgres:
+    image: postgres:16
+    container_name: lead_assignment_pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: lead_assignment
+    ports:
+      # Host port is 5433 to avoid clashing with any other local Postgres on 5432.
+      # Set DB_PORT=5433 when running scripts locally.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
