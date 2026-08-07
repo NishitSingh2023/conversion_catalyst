@@ -43,16 +43,30 @@ from shared.model_io import (  # noqa: E402
 HISTORY_QUERY = "SELECT * FROM lead_manager_history"
 
 
+def _default_n_jobs() -> int:
+    """Pick a bounded thread count for XGBoost.
+
+    ``n_jobs=-1`` is deliberately avoided: on high-core machines the
+    synchronisation overhead of one thread per core dominates for datasets of
+    this size, making training orders of magnitude slower (measured 61s vs 1.8s
+    on 19k rows / 14 cores). A modest cap gives the parallelism benefit without
+    the oversubscription cost.
+    """
+    return max(1, min(8, os.cpu_count() or 1))
+
+
 def train_model(
     history: pd.DataFrame,
     profiles: pd.DataFrame | None = None,
     test_size: float = 0.2,
     random_state: int = 42,
+    n_jobs: int | None = None,
 ) -> tuple[XGBClassifier, list[str], dict]:
     """Train an XGBoost conversion model. Pure function (no DB/S3).
 
     Returns ``(model, feature_columns, metrics)``.
     """
+    n_jobs = _default_n_jobs() if n_jobs is None else n_jobs
     if profiles is None:
         profiles = derive_profiles(history)
 
@@ -79,7 +93,7 @@ def train_model(
         colsample_bytree=0.9,
         scale_pos_weight=scale_pos_weight,
         eval_metric="auc",
-        n_jobs=-1,
+        n_jobs=n_jobs,
         random_state=random_state,
         tree_method="hist",
     )
