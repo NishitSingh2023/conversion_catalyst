@@ -95,7 +95,25 @@ ENVIRONMENT=local python training/train.py
 # 6. Run tests. Integration tests provision their own database and skip
 #    automatically if Postgres is unreachable.
 pytest
+
+# 7. Run a pipeline run so there is something to look at, then open the
+#    read-only dashboard. Bind to localhost: the dashboard has no
+#    authentication and Streamlit listens on all interfaces by default.
+python scripts/run_pipeline.py
+streamlit run dashboard/app.py --server.address 127.0.0.1
 ```
+
+### Dashboard
+
+`dashboard/` is a read-only Streamlit app over the same database the pipeline
+writes to. It issues `SELECT` statements only: `dashboard/data.py` is the single
+module that touches `shared.db`, and it imports `read_sql` and nothing else, so no
+write path is reachable from a view. Agents are identified by `manager_id`
+throughout; `manager_profiles.manager_name` is never selected.
+
+Seven views, all scoped to the run chosen in the sidebar (defaulting to the most
+recent): Pipeline Flow, Model, Manager Profiles, Assignments, Pool,
+Explainability, and Run History.
 
 ## Configuration
 

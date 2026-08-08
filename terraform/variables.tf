@@ -51,9 +51,36 @@ variable "db_instance_class" {
 }
 
 variable "db_allocated_storage" {
-  description = "RDS allocated storage in GB."
+  description = <<-DESC
+    RDS allocated storage in GB. Storage can be grown in place but never shrunk,
+    so this is sized with room rather than to fit.
+
+    Measured locally against the real dataset (2.7M history rows, 30k leads per
+    batch), after the eligibility shortlist cap:
+
+      loaded history + indexes               482 MB   fixed, grows with history
+      new_leads per batch                     16 MB
+      eligibility_matrix per run             270 MB   1.49M rows @ ~181 B
+      scores per run                         233 MB   1.31M rows @ ~179 B
+      assignments + pool per run              ~15 MB
+      ---------------------------------------------
+      persisted per nightly run              ~518 MB
+      temp files during eligibility          3.1 GB   transient; the two per-lead
+                                                      window sorts over 11.6M rows
+                                                      spill at 4MB work_mem
+
+    Nothing prunes the per-run intermediates - each stage only clears its own
+    run_id - so they accumulate at ~0.5 GB per night. 20 GB therefore projects to
+    roughly a month of nightly runs before the disk fills, and less once the
+    3.1 GB transient peak is left free. 100 GB projects to ~185 runs (about six
+    months) on top of that peak.
+
+    Two things would push this further out if it ever matters: a retention policy
+    on eligibility_matrix/scores, which is the real fix, and more work_mem, which
+    would keep the eligibility sorts in memory.
+  DESC
   type        = number
-  default     = 20
+  default     = 100
 }
 
 variable "image_tag" {

@@ -25,7 +25,15 @@ module "lambda_eligibility" {
   handler     = "lambdas.eligibility.handler.lambda_handler"
   # The cross join and filtering run inside Postgres, so this stage streams
   # counts rather than rows and needs little memory.
-  memory_size        = 1024
+  memory_size = 1024
+  # Timeout, not memory, is the binding constraint here. On the real batch the
+  # candidate set is 27,064 valid leads x 953 managers = 25.8M pairs, of which
+  # 11.8M pass the rules. The cross join and filter are cheap (11s measured on
+  # db.t3.micro); the cost is ranking those 11.8M rows in a window function with
+  # the instance's small work_mem, so the sort spills to disk, plus the ~1.35M
+  # row insert and the rejection-sample insert that re-evaluates the same CTEs.
+  # The default 300s timed out mid-statement at 188MB of 1024MB used.
+  timeout            = 900
   role_arn           = aws_iam_role.lambda.arn
   environment        = local.lambda_env
   subnet_ids         = aws_subnet.private[*].id

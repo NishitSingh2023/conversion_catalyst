@@ -35,8 +35,10 @@ _POOL_COLUMNS = [
 ]
 
 # Valid, unassigned leads for the batch, with their best score and whether they
-# ever had an eligible manager. The eligibility stage persists *all* eligible
-# pairs (only rejections are sampled), so this EXISTS check is exact.
+# ever had an eligible manager. Eligibility keeps only the top N candidates per
+# lead, but a lead with any eligible manager still has at least one row, so this
+# EXISTS check distinguishes the two pool reasons exactly - it asks whether the
+# lead had *any* candidate, not how many.
 _UNASSIGNED_LEADS = """
 SELECT
     n.lead_id,

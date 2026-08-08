@@ -11,6 +11,7 @@ import uuid
 import pytest
 from sqlalchemy import text
 
+from lambdas.eligibility import handler
 from lambdas.eligibility.handler import lambda_handler as eligibility
 
 LEAD_LANG, LEAD_GEO = "Hindi", "Delhi"
@@ -172,6 +173,169 @@ def test_rerun_is_idempotent(db, fixture_run):
         {"r": fixture_run["run_id"]},
     ).scalar()
     assert total == len(MANAGERS), "one row per manager for the single valid lead"
+
+
+def test_shortlist_caps_eligible_pairs_per_lead(db, fixture_run, monkeypatch):
+    """The per-lead shortlist bounds how many eligible pairs are written.
+
+    On the real dataset ~433 managers pass the filters for a typical lead, which
+    would put 11.6M rows in this table per run. Only the strongest N survive.
+    """
+    monkeypatch.setattr(handler, "ELIGIBLE_MANAGERS_PER_LEAD", 1)
+    result = eligibility(fixture_run)
+
+    assert result["eligible_pairs"] == 1, "two managers qualify, only one is kept"
+    assert result["eligible_managers_per_lead"] == 1
+    # A capped lead still counts as having candidates, so it is not reported
+    # unassignable and the pool will call it capacity_overflow, not
+    # no_eligible_manager.
+    assert result["leads_with_candidates"] == 1
+    assert result["unassignable_leads"] == 0
+
+
+def test_shortlist_keeps_the_highest_converting_managers(db, fixture_run, monkeypatch):
+    """Ranking is by the manager's conversion rate, descending."""
+    with db.begin() as conn:
+        conn.execute(
+            text("UPDATE manager_profiles SET conv_rate_overall = 0.9 WHERE manager_id = 'T_NEARLY'"),
+        )
+        conn.execute(
+            text("UPDATE manager_profiles SET conv_rate_overall = 0.1 WHERE manager_id = 'T_OK'"),
+        )
+
+    monkeypatch.setattr(handler, "ELIGIBLE_MANAGERS_PER_LEAD", 1)
+    eligibility(fixture_run)
+
+    kept = db.connect().execute(
+        text("SELECT manager_id FROM eligibility_matrix WHERE run_id = :r AND eligible"),
+        {"r": fixture_run["run_id"]},
+    ).scalars().all()
+    assert kept == ["T_NEARLY"]
+
+
+def test_capped_out_manager_is_explained_not_dropped(db, fixture_run, monkeypatch):
+    """An eligible manager below the cap is recorded, distinct from a rule failure.
+
+    The rejection sample exists to answer "why was this rep not offered my
+    lead?"; a rep silently absent from the table cannot answer it.
+    """
+    monkeypatch.setattr(handler, "ELIGIBLE_MANAGERS_PER_LEAD", 1)
+    eligibility(fixture_run)
+    m = _matrix(db, fixture_run["run_id"])
+
+    # Every manager is still accounted for, none dropped.
+    assert set(m) == set(MANAGERS)
+    excluded = [mid for mid, (ok, _) in m.items() if not ok]
+    assert len(excluded) == len(MANAGERS) - 1
+    not_shortlisted = [mid for mid, (ok, reason) in m.items() if reason == "not_shortlisted"]
+    assert len(not_shortlisted) == 1, "the runner-up eligible manager, ranked out"
+    # Rule failures keep their specific reasons rather than becoming 'not_shortlisted'.
+    assert m["T_STALE"][1] == "inactive_no_recent_activity"
+    assert m["T_WRONG_LANG"][1] == "language_mismatch"
+
+
+def test_shortlists_spread_across_the_roster(db, monkeypatch):
+    """Different leads must get different shortlists, or the cap becomes the capacity.
+
+    ``conv_rate_overall`` is a property of the manager, not of the pair, so
+    ranking on it alone hands every lead in a candidate cohort the same managers.
+    Measured on the real batch that put 196 of 902 active managers on any
+    shortlist, capping usable capacity at 196 x 50 seats: 9,070 leads were
+    assigned and 17,736 overflowed to the pool while 700 managers sat idle.
+
+    This drives the two orderings against the same fixture: ranking purely by
+    conversion rate reaches only as many managers as the shortlist is deep, while
+    reserving part of the shortlist for a spread sample reaches far more.
+    """
+    batch_id = f"test-{uuid.uuid4().hex[:8]}"
+    # Enough leads that the spread sample reaching every manager is a near
+    # certainty rather than a coin toss: one slot drawn from 8 managers over 120
+    # leads misses a given manager with probability (7/8)^120, about 1 in 10^7.
+    n_leads, n_managers, depth = 120, 8, 2
+    managers = [f"T_D{i}" for i in range(n_managers)]
+
+    with db.begin() as conn:
+        for i in range(n_leads):
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO new_leads (lead_id, intent_bucket, geography, language,
+                                           product_interest, batch_id, is_valid)
+                    VALUES (:lid, 'H', :geo, :lang, 'JEE', :batch, TRUE)
+                    """
+                ),
+                {"lid": f"{batch_id}-L{i}", "geo": LEAD_GEO, "lang": LEAD_LANG,
+                 "batch": batch_id},
+            )
+        # Distinct conversion rates, so the quality ranking is a strict order and
+        # the same top managers win for every lead.
+        for rank, manager_id in enumerate(managers):
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO manager_profiles (manager_id, languages_handled,
+                        geographies_handled, products_handled, derived_active_flag,
+                        conv_rate_overall)
+                    VALUES (:mid, ARRAY[:lang], ARRAY[:geo], ARRAY['JEE'], TRUE, :rate)
+                    """
+                ),
+                {"mid": manager_id, "lang": LEAD_LANG, "geo": LEAD_GEO,
+                 "rate": 0.9 - rank * 0.1},
+            )
+
+    def run_with(quality_slots: int) -> dict:
+        run_id = f"testrun-{uuid.uuid4().hex[:8]}"
+        with db.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO pipeline_runs (run_id, batch_id, status) "
+                    "VALUES (:r, :b, 'running')"
+                ),
+                {"r": run_id, "b": batch_id},
+            )
+        monkeypatch.setattr(handler, "ELIGIBLE_MANAGERS_PER_LEAD", depth)
+        monkeypatch.setattr(handler, "ELIGIBLE_TOP_BY_CONV_RATE", quality_slots)
+        result = eligibility(
+            {"run_id": run_id, "batch_id": batch_id, "business_date": "2026-06-15"}
+        )
+        with db.begin() as conn:
+            conn.execute(
+                text("DELETE FROM eligibility_matrix WHERE run_id = :r"), {"r": run_id}
+            )
+            conn.execute(text("DELETE FROM pipeline_runs WHERE run_id = :r"), {"r": run_id})
+        return result
+
+    try:
+        quality_only = run_with(quality_slots=depth)
+        stratified = run_with(quality_slots=1)
+
+        # Pure quality ranking cannot reach past the shortlist depth, however many
+        # managers are eligible and free.
+        assert quality_only["managers_shortlisted"] == depth
+        # Reserving a slot for the spread sample reaches the rest of the roster.
+        assert stratified["managers_shortlisted"] > depth
+        assert stratified["managers_shortlisted"] == n_managers
+
+        # Both still respect the cap, and every lead still gets a full shortlist.
+        for result in (quality_only, stratified):
+            assert result["eligible_pairs"] <= n_leads * depth
+            assert result["leads_with_candidates"] == n_leads
+    finally:
+        with db.begin() as conn:
+            conn.execute(text("DELETE FROM new_leads WHERE batch_id = :b"), {"b": batch_id})
+            conn.execute(
+                text("DELETE FROM manager_profiles WHERE manager_id = ANY(:ids)"),
+                {"ids": managers},
+            )
+
+
+def test_quality_slice_cannot_exceed_the_shortlist(db, fixture_run, monkeypatch):
+    """A quality slice wider than the shortlist must clamp, not disable the spread."""
+    monkeypatch.setattr(handler, "ELIGIBLE_MANAGERS_PER_LEAD", 1)
+    monkeypatch.setattr(handler, "ELIGIBLE_TOP_BY_CONV_RATE", 999)
+
+    result = eligibility(fixture_run)
+    assert result["eligible_pairs"] == 1, "the cap still holds"
 
 
 def test_missing_run_id_raises(db):

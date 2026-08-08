@@ -1,13 +1,21 @@
-"""Unit test for the pure training function on a tiny in-memory dataset."""
+"""Tests for the training path.
+
+``train_model`` is exercised on a tiny in-memory frame (no DB). The negative
+downsampling that bounds training memory does need Postgres, because the sampling
+is done in SQL - the whole point is that the full history never reaches pandas.
+"""
 from __future__ import annotations
 
 import random
+import uuid
 
 import pandas as pd
+import pytest
+from sqlalchemy import text
 
 from shared.features import align_features, build_features, normalize_history_columns
 from shared.manager_profiles import derive_profiles
-from training.train import train_model
+from training.train import read_training_history, train_model
 
 LANGS = ["Hindi", "English"]
 GEOS = ["Delhi", "Mumbai"]
@@ -72,3 +80,109 @@ def test_normalize_history_columns_are_canonical():
     canonical = normalize_history_columns(history)
     for col in ("intent_bucket", "geography", "language", "product_interest"):
         assert col in canonical.columns
+
+
+# ---------------------------------------------------------------------------
+# Negative downsampling (SQL; needs Postgres)
+# ---------------------------------------------------------------------------
+POSITIVES = 20
+NEGATIVES = 500
+
+
+@pytest.fixture
+def imbalanced_history(db):
+    """Seed a deliberately imbalanced history and report the whole table's balance.
+
+    The sampling query is global, so assertions are written against the table's
+    actual class counts rather than assuming these are the only rows in it.
+    """
+    from shared.db import write_dataframe
+
+    tag = f"S{uuid.uuid4().hex[:8]}"
+    rows = [
+        {
+            "lead_id": f"{tag}-{i}", "manager_id": f"{tag}-MGR",
+            "lead_intent_bucket": "H" if i % 2 else "M",
+            "lead_language": "Hindi", "lead_geography": "Delhi",
+            "lead_product": "JEE", "lead_source": "organic", "lead_grade": "11",
+            "first_response_mins": 12.0, "converted": i < POSITIVES,
+            "interaction_date": "2026-08-01",
+        }
+        for i in range(POSITIVES + NEGATIVES)
+    ]
+    write_dataframe(pd.DataFrame(rows), "lead_manager_history")
+
+    with db.begin() as conn:
+        totals = conn.execute(
+            text(
+                "SELECT count(*) FILTER (WHERE converted) AS pos, "
+                "       count(*) FILTER (WHERE NOT converted) AS neg "
+                "FROM lead_manager_history"
+            )
+        ).one()
+
+    yield tag, int(totals.pos), int(totals.neg)
+
+    with db.begin() as conn:
+        conn.execute(
+            text("DELETE FROM lead_manager_history WHERE manager_id = :m"),
+            {"m": f"{tag}-MGR"},
+        )
+
+
+def _own(history: pd.DataFrame, tag: str) -> pd.DataFrame:
+    return history[history["manager_id"] == f"{tag}-MGR"]
+
+
+def test_downsampling_keeps_every_positive(db, imbalanced_history):
+    """Positives are the entire signal at a 1.2% base rate; none may be dropped."""
+    tag, total_pos, total_neg = imbalanced_history
+    ratio = 3
+
+    history, sampling = read_training_history(negatives_per_positive=ratio)
+
+    assert sampling["downsampled"] is True
+    assert int(history["converted"].sum()) == total_pos, "every positive retained"
+    assert int(_own(history, tag)["converted"].sum()) == POSITIVES
+    # The negative side is capped, and capped is the only thing it is.
+    assert int((~history["converted"]).sum()) == min(ratio * total_pos, total_neg)
+    assert int((~history["converted"]).sum()) < total_neg, "negatives were reduced"
+
+
+def test_downsampling_is_deterministic(db, imbalanced_history):
+    """Same data, same sample - so a re-train is reproducible."""
+    tag, _, _ = imbalanced_history
+
+    first, _ = read_training_history(negatives_per_positive=3)
+    second, _ = read_training_history(negatives_per_positive=3)
+    assert list(first["lead_id"]) == list(second["lead_id"])
+
+
+def test_sampled_history_stays_ordered_by_id(db, imbalanced_history):
+    """The train/test split slices positionally, so row order must be stable."""
+    tag, _, _ = imbalanced_history
+
+    history, _ = read_training_history(negatives_per_positive=3)
+    ids = list(history["id"])
+    assert ids == sorted(ids)
+
+
+def test_sampling_off_reads_everything(db, imbalanced_history):
+    """A ratio of 0 disables sampling rather than dropping every negative."""
+    tag, total_pos, total_neg = imbalanced_history
+
+    history, sampling = read_training_history(negatives_per_positive=0)
+
+    assert sampling["downsampled"] is False
+    assert len(history) == total_pos + total_neg
+    assert len(_own(history, tag)) == POSITIVES + NEGATIVES
+
+
+def test_ratio_wider_than_the_data_is_not_downsampling(db, imbalanced_history):
+    """Asking for more negatives than exist reads the full history untouched."""
+    tag, total_pos, total_neg = imbalanced_history
+
+    history, sampling = read_training_history(negatives_per_positive=10_000)
+
+    assert sampling["downsampled"] is False
+    assert len(history) == total_pos + total_neg

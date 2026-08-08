@@ -12,5 +12,11 @@ Layout:
       selector, ``st.navigation`` dispatch.
     * :mod:`dashboard.data` -- query layer: parameterized, run-scoped reads.
     * :mod:`dashboard.format` -- pure formatting helpers (no Streamlit, no DB).
-    * :mod:`dashboard.pages` -- the seven view modules.
+    * :mod:`dashboard.views` -- the seven view modules.
 """
+
+# The single cross-page session key. It lives here, in the package root, because
+# both the app (which writes it) and every page (which reads it) need it, and
+# neither can import the other without a cycle. Declaring it as a bare string
+# keeps this module import-cheap: nothing here pulls in Streamlit or a driver.
+SELECTED_RUN_KEY = "selected_run"
