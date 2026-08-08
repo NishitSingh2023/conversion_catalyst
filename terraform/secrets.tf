@@ -3,7 +3,16 @@
 resource "aws_secretsmanager_secret" "db" {
   name        = "${local.name_prefix}/db-credentials"
   description = "Postgres credentials for the lead assignment engine."
-  tags        = local.common_tags
+
+  # Delete immediately instead of the 30-day default recovery window. A deleted
+  # secret keeps its name reserved for the whole window, so a destroy followed by
+  # a re-apply fails with "already scheduled for deletion" - the exact loop you
+  # hit while iterating in a lab account. Nothing here is worth recovering: the
+  # password is regenerated on every apply and the account is wiped after the
+  # event.
+  recovery_window_in_days = 0
+
+  tags = local.common_tags
 }
 
 resource "aws_secretsmanager_secret_version" "db" {
@@ -22,7 +31,12 @@ resource "aws_secretsmanager_secret_version" "db" {
 resource "aws_secretsmanager_secret" "lsq" {
   name        = "${local.name_prefix}/lsq-api"
   description = "LSQ bulk API credentials."
-  tags        = local.common_tags
+
+  # Same reasoning as the db secret: no recovery window, so destroy/re-apply
+  # cycles do not collide on the reserved name.
+  recovery_window_in_days = 0
+
+  tags = local.common_tags
 }
 
 resource "aws_secretsmanager_secret_version" "lsq" {

@@ -1,5 +1,15 @@
+# AZ names are always derived from the configured region, never hardcoded, so
+# moving between regions needs no edits here. The opt-in filter keeps Local
+# Zones out of the result: us-west-2 fronts several (LAX, PDX, HNL, LAS) and if
+# one were ever opted in for the account it could land in the slice below, where
+# RDS and interface VPC endpoints are not offered.
 data "aws_availability_zones" "available" {
   state = "available"
+
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
 }
 
 locals {

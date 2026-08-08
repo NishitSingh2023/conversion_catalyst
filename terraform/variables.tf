@@ -1,7 +1,11 @@
 variable "aws_region" {
   description = "AWS region to deploy into."
   type        = string
-  default     = "us-east-1"
+  # us-west-2 (Oregon) is the only region the hackathon lab account is enabled
+  # for. Calls made against any other region come back as opaque "access
+  # denied" errors, which is the single most common failure there, so the
+  # default points at Oregon rather than the AWS-wide default of us-east-1.
+  default = "us-west-2"
 }
 
 variable "environment" {

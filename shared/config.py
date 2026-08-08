@@ -47,7 +47,11 @@ def _load_secret_json(secret_arn: str) -> dict:
     """Fetch and parse a JSON secret from AWS Secrets Manager."""
     import boto3  # imported lazily so local dev without boto3 creds still works
 
-    client = boto3.client("secretsmanager", region_name=os.getenv("AWS_REGION", "us-east-1"))
+    # AWS_REGION still wins: Lambda injects it at runtime. The fallback matters
+    # only outside Lambda (local scripts, containers), and it is us-west-2
+    # because the hackathon lab account is Oregon-only - a call to the wrong
+    # region fails as "access denied" rather than anything region-shaped.
+    client = boto3.client("secretsmanager", region_name=os.getenv("AWS_REGION", "us-west-2"))
     resp = client.get_secret_value(SecretId=secret_arn)
     return json.loads(resp["SecretString"])
 
@@ -90,6 +94,8 @@ def get_config() -> AppConfig:
         model_bucket=os.getenv("MODEL_BUCKET", "lead-assignment-models-dev"),
         lsq_api_base_url=os.getenv("LSQ_API_BASE_URL", "https://mock-lsq.local/api"),
         lsq_api_key=_resolve_lsq_key(),
-        aws_region=os.getenv("AWS_REGION", "us-east-1"),
+        # Same reasoning as _load_secret_json: env var wins, and the fallback is
+        # Oregon because that is the only region the lab account can reach.
+        aws_region=os.getenv("AWS_REGION", "us-west-2"),
         environment=os.getenv("ENVIRONMENT", "local"),
     )
