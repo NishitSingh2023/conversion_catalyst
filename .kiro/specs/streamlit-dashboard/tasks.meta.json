@@ -1,0 +1,194 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Create the `dashboard/` package skeleton": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420098
+      }
+    ],
+    "1.2 Confirm and pin dashboard and property-test dependencies": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420270
+      }
+    ],
+    "2.1 Implement the null, probability, percent, array, and confidence formatters": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420339
+      }
+    ],
+    "2.2 Implement the pagination helper": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420415
+      }
+    ],
+    "3. Checkpoint - helpers verified": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420461
+      }
+    ],
+    "4.1 Create the module skeleton, connection probe, and caching conventions": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420546
+      }
+    ],
+    "4.2 Implement the run list query": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420641
+      }
+    ],
+    "4.3 Implement the Pipeline Flow queries": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420717
+      }
+    ],
+    "4.4 Implement the active model query": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420834
+      }
+    ],
+    "4.5 Implement the Manager Profiles and per-agent capacity queries": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420922
+      }
+    ],
+    "4.6 Implement the Assignments queries": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168420994
+      }
+    ],
+    "4.7 Implement the Pool queries": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421071
+      }
+    ],
+    "4.8 Implement the Explainability queries": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421127
+      }
+    ],
+    "5. Checkpoint - data layer verified": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421188
+      }
+    ],
+    "6.1 Wire the connection bootstrap and friendly failure message": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421259
+      }
+    ],
+    "6.2 Implement the sidebar run selector and shared session state": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421321
+      }
+    ],
+    "6.3 Register the seven pages and the global cache-refresh control": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421393
+      }
+    ],
+    "7.1 Implement the Pipeline Flow view (`dashboard/pages/pipeline_flow.py`)": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421468
+      }
+    ],
+    "7.2 Implement the Model view (`dashboard/pages/model.py`)": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421554
+      }
+    ],
+    "7.3 Implement the Manager Profiles view (`dashboard/pages/manager_profiles.py`)": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421665
+      }
+    ],
+    "7.4 Implement the Assignments view (`dashboard/pages/assignments.py`)": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421756
+      }
+    ],
+    "7.5 Implement the Pool view (`dashboard/pages/pool.py`)": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168421822
+      }
+    ],
+    "7.6 Implement the Explainability view (`dashboard/pages/explainability.py`)": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168422109
+      }
+    ],
+    "7.7 Implement the Run History view (`dashboard/pages/run_history.py`)": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168422195
+      }
+    ],
+    "8. Checkpoint - all views render": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168422256
+      }
+    ],
+    "9.1 Write a run-seeding helper for integration tests": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168422328
+      }
+    ],
+    "10.2 Run the full verification pass and fix fallout": [
+      {
+        "executionId": "a6f8fd66-c8e4-4dc6-be14-b0071a78a0c6",
+        "chatSessionId": "sess_83ff0df9-30f6-431e-91e9-24366bca43e3",
+        "timestamp": 1786168422404
+      }
+    ]
+  }
+}

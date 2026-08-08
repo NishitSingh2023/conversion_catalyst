@@ -17,21 +17,21 @@ every page is registered in `app.py`'s `st.navigation`.
 ## Tasks
 
 - [ ] 1. Scaffold the dashboard package and confirm dependencies
-  - [ ] 1.1 Create the `dashboard/` package skeleton
+  - [x] 1.1 Create the `dashboard/` package skeleton
     - Create `dashboard/__init__.py` and `dashboard/pages/__init__.py` (empty package markers)
     - Create empty module placeholders `dashboard/format.py`, `dashboard/data.py`, `dashboard/app.py` with module docstrings stating the read-only contract
     - Do not import `shared.db.write_dataframe` or `shared.db.execute` anywhere under `dashboard/`
     - _Design: Project Structure, Security & Safety_
     - _Requirements: 1.2, 1.3_
 
-  - [ ] 1.2 Confirm and pin dashboard and property-test dependencies
+  - [x] 1.2 Confirm and pin dashboard and property-test dependencies
     - Verify `requirements-dev.txt` already pins `streamlit==1.36.0` and `plotly==5.22.0` (the `st.Page` / `st.navigation` API requires >= 1.36.0); leave as-is if present
     - Add a pinned `hypothesis` entry to `requirements-dev.txt` (needed for the property tests in task 2); no other new dependency
     - _Design: Streamlit and multipage approach, Testing Strategy_
     - _Requirements: 11.3_
 
 - [ ] 2. Implement the pure formatting and pagination helpers (`dashboard/format.py`)
-  - [ ] 2.1 Implement the null, probability, percent, array, and confidence formatters
+  - [~] 2.1 Implement the null, probability, percent, array, and confidence formatters
     - `na_or(value)`: return exactly `"N/A"` for `None`/`NaN`, otherwise a formatted string
     - `format_probability(value, precision)`: fixed-precision rendering of a 0..1 float, `"N/A"` for null
     - `format_percent(value, precision)`: fixed-precision percent rendering, `"N/A"` for null
@@ -41,7 +41,7 @@ every page is registered in `app.py`'s `st.navigation`.
     - _Design: format.py conventions, Error Handling (Empty and loading states)_
     - _Requirements: 5.2, 6.1, 7.6, 8.5_
 
-  - [ ] 2.2 Implement the pagination helper
+  - [~] 2.2 Implement the pagination helper
     - `page_window(page_index, page_size) -> (limit, offset)` with `offset = page_index * page_size`, `limit = page_size`, clamping a negative page index to 0 so `offset` is never negative
     - Add `page_count(total_rows, page_size)` used by the view prev/next controls
     - _Design: In-app data structures (Pagination parameters)_
@@ -82,11 +82,11 @@ every page is registered in `app.py`'s `st.navigation`.
     - File: `tests/test_dashboard_format_units.py`
     - _Requirements: 5.2, 6.1, 8.5_
 
-- [ ] 3. Checkpoint - helpers verified
+- [~] 3. Checkpoint - helpers verified
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 4. Implement the read-only data-access layer (`dashboard/data.py`)
-  - [ ] 4.1 Create the module skeleton, connection probe, and caching conventions
+  - [~] 4.1 Create the module skeleton, connection probe, and caching conventions
     - Every public function takes explicit params and calls `shared.db.read_sql(SQL, params)`; import only `read_sql` from `shared.db` so no write path is reachable
     - `probe_connection()`: run a trivial `SELECT 1` and return a success flag plus the non-secret `host`, `port`, `dbname` read explicitly off `shared.config.get_config()` (never dump the config object, never touch the password)
     - Bind `:cap` from `shared.constants.MAX_LEADS_PER_MANAGER` and expose `INTENT_PRIORITY` for ordering where needed
@@ -94,34 +94,34 @@ every page is registered in `app.py`'s `st.navigation`.
     - _Design: Data-Access Layer Design, Caching Strategy, Security & Safety_
     - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 2.5, 11.3_
 
-  - [ ] 4.2 Implement the run list query
+  - [~] 4.2 Implement the run list query
     - `get_runs()`: `SELECT run_id, started_at, completed_at, status, stage, leads_processed, leads_assigned, leads_pooled FROM pipeline_runs ORDER BY started_at DESC`, cached `ttl=30`
     - Serves both the sidebar selector and the Run History view; the first row is the default Selected_Run so no separate "latest run" query exists
     - Return an empty DataFrame (not an exception) when the table has no rows
     - _Design: Run selection queries, Run History queries_
     - _Requirements: 3.1, 3.2, 3.4, 10.1, 10.2, 10.4_
 
-  - [ ] 4.3 Implement the Pipeline Flow queries
+  - [~] 4.3 Implement the Pipeline Flow queries
     - `get_run_header(run_id)`: run row including `errors`, scoped `WHERE run_id = :run_id`
     - `get_funnel_reconciliation(run_id)`: single query returning `assigned`, `pooled`, and `reconciled_total` via scalar subqueries over `assignments` and `pool` — aggregation in SQL, not pandas
     - `get_pool_reason_breakdown(run_id)`: `GROUP BY reason`
     - _Design: Pipeline Flow queries_
     - _Requirements: 1.4, 4.1, 4.2, 4.3, 4.4, 4.5, 11.4_
 
-  - [ ] 4.4 Implement the active model query
+  - [~] 4.4 Implement the active model query
     - `get_active_model()`: `SELECT model_id, trained_at, auc, precision, recall, training_rows, feature_list FROM model_registry WHERE is_active`, cached `ttl=300`
     - Return an empty DataFrame when no active model exists
     - _Design: Model query, Caching Strategy_
     - _Requirements: 5.1, 5.4, 5.5, 11.3_
 
-  - [ ] 4.5 Implement the Manager Profiles and per-agent capacity queries
+  - [~] 4.5 Implement the Manager Profiles and per-agent capacity queries
     - `get_manager_profiles()`: explicit column list with `conv_rate_h AS "conv_rate_H"`, `conv_rate_m AS "conv_rate_M"`, `conv_rate_l AS "conv_rate_L"`, ordered by `manager_id`, cached `ttl=300`; `manager_name` is not in the SELECT list
     - `get_agent_capacity(run_id, cap)`: `manager_profiles` LEFT JOIN a `GROUP BY primary_manager_id` subquery over `assignments` for the run, returning `current_run_assignments` and `GREATEST(0, :cap - COALESCE(...))` as `remaining_capacity`, aggregated in SQL
     - `manager_profiles.manager_id` is the primary key, so the table grain already satisfies the per-agent grouping
     - _Design: Manager Profiles queries, Cross-cutting SQL notes_
     - _Requirements: 1.4, 2.6, 2.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 11.4_
 
-  - [ ] 4.6 Implement the Assignments queries
+  - [~] 4.6 Implement the Assignments queries
     - `get_assignments(run_id, limit, offset)`: paged rows ordered by `lead_id`
     - `count_assignments(run_id)`: `count(*)` driver for page navigation
     - `get_push_status_breakdown(run_id)`: `GROUP BY push_status`
@@ -130,14 +130,14 @@ every page is registered in `app.py`'s `st.navigation`.
     - _Design: Assignments queries_
     - _Requirements: 1.4, 7.1, 7.2, 7.3, 7.4, 7.5, 11.1, 11.4_
 
-  - [ ] 4.7 Implement the Pool queries
+  - [~] 4.7 Implement the Pool queries
     - `get_pool(run_id, limit, offset)`: paged rows ordered by `priority_rank ASC`
     - `count_pool(run_id)`: `count(*)` driver
     - `get_pool_status_breakdown(run_id)`: `GROUP BY status`; reuse `get_pool_reason_breakdown` from 4.3 for the reason breakdown
     - _Design: Pool queries_
     - _Requirements: 1.4, 8.1, 8.2, 8.3, 8.4, 11.1, 11.4_
 
-  - [ ] 4.8 Implement the Explainability queries
+  - [~] 4.8 Implement the Explainability queries
     - `get_lead_attributes(lead_id)`: `lead_id, intent_bucket, geography, language, product_interest` from `new_leads`
     - `get_eligible_agents(run_id, lead_id, limit, offset)`: `eligibility_matrix` where `eligible`, ordered by `manager_id`
     - `get_lead_scores(run_id, lead_id, limit, offset)`: `scores` ordered by `conversion_probability DESC`
@@ -148,30 +148,30 @@ every page is registered in `app.py`'s `st.navigation`.
     - _Design: Explainability queries_
     - _Requirements: 9.1, 9.2, 9.3, 9.5, 9.6, 11.1, 11.2_
 
-- [ ] 5. Checkpoint - data layer verified
+- [~] 5. Checkpoint - data layer verified
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 6. Implement the app entry point (`dashboard/app.py`)
-  - [ ] 6.1 Wire the connection bootstrap and friendly failure message
+  - [~] 6.1 Wire the connection bootstrap and friendly failure message
     - Set page config, then call `data.probe_connection()`; on failure render "Cannot connect to database `<dbname>` at `<host>:<port>`" and `st.stop()` — no stack trace, no credentials, nothing logged from the config object
     - _Design: app.py responsibilities, Security & Safety_
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-  - [ ] 6.2 Implement the sidebar run selector and shared session state
+  - [~] 6.2 Implement the sidebar run selector and shared session state
     - Load `data.get_runs()`; if empty, render the "No runs are available." Empty_State and skip page dispatch without raising
     - Default `st.session_state["selected_run"]` to `run_list[0].run_id` (most recent `started_at`) when unset
     - Render the sidebar `st.selectbox` labeled `run_id | started_at | status` and write the choice back to `st.session_state["selected_run"]` so every page reads the same run on the same rerun
     - _Design: Run Selection & State_
     - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-  - [ ] 6.3 Register the seven pages and the global cache-refresh control
+  - [~] 6.3 Register the seven pages and the global cache-refresh control
     - Build `st.Page` entries for Pipeline Flow, Model, Manager Profiles, Assignments, Pool, Explainability, Run History in that order with explicit titles, and dispatch via `st.navigation(...).run()`
     - Add a sidebar "Refresh cached data" button that calls `st.cache_data.clear()`, serving as the manual refresh control for the cached Model and Manager Profiles reads
     - _Design: Streamlit and multipage approach, Caching Strategy_
     - _Requirements: 5.5, 6.6, 11.3_
 
 - [ ] 7. Implement the seven view pages
-  - [ ] 7.1 Implement the Pipeline Flow view (`dashboard/pages/pipeline_flow.py`)
+  - [~] 7.1 Implement the Pipeline Flow view (`dashboard/pages/pipeline_flow.py`)
     - Read `selected_run` from session state; call the run-header, funnel-reconciliation, and pool-by-reason queries inside `st.spinner`
     - Metric row for `status`, `stage`, `started_at`, `completed_at`; second row for `leads_processed`, `leads_assigned`, `leads_pooled`
     - Reconciliation callout comparing `reconciled_total` (assigned + pooled) against `leads_processed`, plus the assigned/pooled split
@@ -180,7 +180,7 @@ every page is registered in `app.py`'s `st.navigation`.
     - _Design: Per-View Design 1_
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-  - [ ] 7.2 Implement the Model view (`dashboard/pages/model.py`)
+  - [~] 7.2 Implement the Model view (`dashboard/pages/model.py`)
     - Render `model_id` and `trained_at` in the header; `st.metric`s for `auc`, `precision`, `recall`, `training_rows` with null metrics shown as `"N/A"`
     - Render `feature_list` (JSONB) as a list inside an expander
     - Fixed caveat line: model metrics are high-variance when the positive class is small
@@ -188,7 +188,7 @@ every page is registered in `app.py`'s `st.navigation`.
     - _Design: Per-View Design 2_
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-  - [ ] 7.3 Implement the Manager Profiles view (`dashboard/pages/manager_profiles.py`)
+  - [~] 7.3 Implement the Manager Profiles view (`dashboard/pages/manager_profiles.py`)
     - Join the cached profiles frame to the run-scoped capacity frame on `manager_id`; render as a searchable/paginated `st.dataframe`
     - Render `languages_handled`, `geographies_handled`, `products_handled` through `format.format_text_array`; show `conv_rate_H`/`conv_rate_M`/`conv_rate_L` under those displayed names
     - Show `current_run_assignments` and `remaining_capacity` against the cap of 50
@@ -197,7 +197,7 @@ every page is registered in `app.py`'s `st.navigation`.
     - _Design: Per-View Design 3_
     - _Requirements: 2.6, 2.7, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
 
-  - [ ] 7.4 Implement the Assignments view (`dashboard/pages/assignments.py`)
+  - [~] 7.4 Implement the Assignments view (`dashboard/pages/assignments.py`)
     - Push-status breakdown metrics/bar on top; agent-wise distribution chart with `at_cap` agents (count = 50) visually highlighted
     - Paged `st.dataframe` of assignment rows driven by `format.page_window` and the `count(*)` query, with prev/next controls
     - Primary and fallback agents shown by `manager_id`; null `fallback_manager_id` -> `"N/A"` with confidence rendered via `format.format_confidence` so a no-fallback row displays the primary match score
@@ -205,7 +205,7 @@ every page is registered in `app.py`'s `st.navigation`.
     - _Design: Per-View Design 4_
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 11.1_
 
-  - [ ] 7.5 Implement the Pool view (`dashboard/pages/pool.py`)
+  - [~] 7.5 Implement the Pool view (`dashboard/pages/pool.py`)
     - Reason and status breakdown metrics/bars from the SQL aggregates
     - Paged `st.dataframe` ordered by `priority_rank ASC` with prev/next controls
     - Null `best_score` -> `"N/A"`; null `claimed_by` / `claimed_at` on available entries -> `"N/A"`
@@ -213,7 +213,7 @@ every page is registered in `app.py`'s `st.navigation`.
     - _Design: Per-View Design 5_
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 11.1_
 
-  - [ ] 7.6 Implement the Explainability view (`dashboard/pages/explainability.py`)
+  - [~] 7.6 Implement the Explainability view (`dashboard/pages/explainability.py`)
     - `lead_id` picker plus two quick-pick buttons seeded from `get_default_interesting_leads` (highest-confidence assignment, a `capacity_overflow` pool lead); preselect the highest-confidence lead on first open
     - Render lead attributes, then the scored-agents table ordered by probability desc, then the eligible-agents list, both paged
     - Gate the rejections section on `has_rejection_rows`: when false render "Rejection detail was not sampled for this lead", never "no managers were rejected"
@@ -222,18 +222,18 @@ every page is registered in `app.py`'s `st.navigation`.
     - _Design: Per-View Design 6_
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 11.1_
 
-  - [ ] 7.7 Implement the Run History view (`dashboard/pages/run_history.py`)
+  - [~] 7.7 Implement the Run History view (`dashboard/pages/run_history.py`)
     - `st.dataframe` of `pipeline_runs` ordered by `started_at DESC` with the columns from the run list query
     - A select control that writes `st.session_state["selected_run"]` and reruns, so selecting here behaves identically to the sidebar
     - Null `completed_at` -> `"N/A"`; empty result -> "No run history is available."
     - _Design: Per-View Design 7, Run Selection & State_
     - _Requirements: 10.1, 10.2, 10.3, 10.4_
 
-- [ ] 8. Checkpoint - all views render
+- [~] 8. Checkpoint - all views render
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 9. Add integration coverage for the data-access layer
-  - [ ] 9.1 Write a run-seeding helper for integration tests
+  - [~] 9.1 Write a run-seeding helper for integration tests
     - `tests/dashboard_seed.py`: insert a minimal deterministic fixture into the migrated test DB — two `pipeline_runs` rows, a handful of `manager_profiles` (including one with a non-null `manager_name` so anonymization is actually exercised), `new_leads`, `scores`, `eligibility_matrix` (eligible and sampled-rejection rows), `assignments` (one with null `fallback_manager_id`, one manager at the 50 cap), `pool` rows for both reasons, and an active `model_registry` row
     - Build on the existing session-scoped `db` fixture in `tests/conftest.py` so the helper reuses the provisioned `lead_assignment_test` database
     - _Design: Testing Strategy_
@@ -260,7 +260,7 @@ every page is registered in `app.py`'s `st.navigation`.
     - File: `tests/test_dashboard_smoke.py`
     - _Requirements: 3.3_
 
-  - [ ] 10.2 Run the full verification pass and fix fallout
+  - [~] 10.2 Run the full verification pass and fix fallout
     - Run `ruff check .` and the full suite with `DB_PORT=5433 pytest` (Postgres up via `docker compose up -d postgres`) so both the pure-function and DB-touching tiers execute; fix any failures
     - Confirm every `data.py` function is referenced by at least one page and every page is registered in `app.py` — no orphaned code
     - Manual step for the user (do not run from the agent, it is a long-running server): `DB_PORT=5433 streamlit run dashboard/app.py`, then confirm all seven views render against the committed run data
