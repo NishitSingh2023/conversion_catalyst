@@ -17,10 +17,17 @@ locals {
 
   azs = slice(data.aws_availability_zones.available.names, 0, var.az_count)
 
-  # Private subnets (RDS + Lambda ENIs) plus, when egress is enabled, public
-  # subnets that host the NAT gateway.
+  # Private subnets (RDS + Lambda ENIs) plus, when the public network is needed,
+  # public subnets that host the NAT gateway or the bastion.
   private_subnet_cidrs = [for i in range(var.az_count) : cidrsubnet(var.vpc_cidr, 8, i)]
   public_subnet_cidrs  = [for i in range(var.az_count) : cidrsubnet(var.vpc_cidr, 8, i + 100)]
+
+  # The internet gateway, public subnets and public route table are shared
+  # scaffolding: a NAT gateway needs them to route Lambda egress out, and a
+  # bastion needs them for its own public IP. Either feature alone is enough to
+  # justify creating them, and the NAT gateway itself - the part that actually
+  # bills by the hour - stays gated on enable_nat_gateway only.
+  need_public_network = var.enable_nat_gateway || var.enable_bastion
 
   common_tags = {
     Project     = var.project_name

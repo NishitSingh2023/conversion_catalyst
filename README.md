@@ -181,6 +181,20 @@ secrets and log groups do not collide.
   `lsq_api_base_url` at a live sandbox without also setting
   `enable_nat_gateway = true` is the broken combination: the call has nowhere to
   go and each batch stalls for the 30s HTTP timeout.
+- **Laptop access is opt-in, via a bastion.** Two things have to reach Postgres
+  from outside AWS: loading the sample CSVs (`data/sample/` is in
+  `.dockerignore`, so the image carries none, and `train` fails with
+  "lead_manager_history is empty" until data is there) and the Streamlit
+  dashboard, which connects straight to Postgres. RDS is private, so
+  `enable_bastion = true` provisions a `t3.micro` jump host and the internet
+  gateway and public subnets it needs; the NAT gateway stays separately gated.
+  Its security group admits SSH from `bastion_allowed_cidr` and nothing else,
+  which must be a single `/32` and has no default, so there is no path to an
+  open SSH port. `terraform output bastion_ssh_tunnel_command` prints the
+  local-forward to paste, and `bastion_db_password_command` prints how to pull
+  the password out of Secrets Manager. It is an internet-facing host on a
+  rotating home address: stop it or re-apply with `enable_bastion=false` once
+  the load or the demo is done.
 - **What bills while idle.** The always-on costs are the RDS instance
   (`db.t3.micro`, 20GB gp3) and the Secrets Manager interface VPC endpoint, which
   is charged per AZ per hour and is created in both private subnets. Lambda,

@@ -90,3 +90,50 @@ variable "training_schedule" {
   type        = string
   default     = "cron(0 20 ? * SUN *)" # Sundays 20:00 UTC
 }
+variable "enable_bastion" {
+  description = <<-DESC
+    Provision a small SSH jump host in a public subnet. RDS is private and its
+    security group only admits the Lambda SG, so nothing on a laptop can reach
+    Postgres directly: not scripts/load_sample_data.py, and not the Streamlit
+    dashboard, which talks to Postgres rather than going through a Lambda. The
+    bastion exists purely so an SSH local-forward can bridge that gap.
+
+    Off by default. It is an internet-facing instance, so stop it or destroy it
+    (`-var="enable_bastion=false"` then apply) as soon as the load or the demo
+    is finished rather than leaving it running.
+  DESC
+  type        = bool
+  default     = false
+}
+
+variable "bastion_allowed_cidr" {
+  description = <<-DESC
+    The single CIDR allowed to SSH to the bastion. Must be a /32 - use your own
+    public address (`curl -s https://checkip.amazonaws.com`), never 0.0.0.0/0.
+    Home and mobile addresses rotate, so if SSH starts timing out after working
+    earlier, re-check your address and re-apply with the new value before
+    assuming anything is wrong with the host.
+  DESC
+  type        = string
+  default     = ""
+
+  validation {
+    # Empty is allowed only because the bastion is off by default; the
+    # enable_bastion-and-no-CIDR combination is rejected by the precondition on
+    # the bastion security group in bastion.tf, which fails at plan time.
+    condition     = var.bastion_allowed_cidr == "" || can(cidrnetmask(var.bastion_allowed_cidr)) && endswith(var.bastion_allowed_cidr, "/32")
+    error_message = "bastion_allowed_cidr must be a single host CIDR ending in /32, e.g. 203.0.113.7/32."
+  }
+}
+
+variable "bastion_instance_type" {
+  description = "Instance type for the bastion. It only forwards TCP, so the smallest burstable size is plenty."
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "bastion_public_key_path" {
+  description = "Path to the local SSH public key installed on the bastion. Expanded with pathexpand, so ~ works."
+  type        = string
+  default     = "~/.ssh/id_rsa.pub"
+}

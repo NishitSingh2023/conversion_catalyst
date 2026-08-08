@@ -39,7 +39,11 @@ resource "aws_security_group" "lambda" {
 }
 
 resource "aws_security_group" "rds" {
-  name        = "${local.name_prefix}-rds-sg"
+  name = "${local.name_prefix}-rds-sg"
+  # Leave this description alone. AWS treats a security group description as
+  # immutable, so editing the string forces Terraform to replace the whole
+  # group - and this one is attached to the live RDS instance, where a replace
+  # risks a DependencyViolation for a cosmetic gain.
   description = "Postgres; only reachable from Lambda SG."
   vpc_id      = aws_vpc.main.id
 
@@ -49,6 +53,23 @@ resource "aws_security_group" "rds" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda.id]
+  }
+
+  # The bastion rule is a dynamic block rather than a standalone
+  # aws_security_group_rule / aws_vpc_security_group_ingress_rule on purpose.
+  # This SG already declares its rules inline, and the two styles cannot be
+  # mixed on one group: inline blocks are authoritative, so Terraform would
+  # revoke any rule it does not see inline on the next apply and the standalone
+  # resource would re-add it, flapping the rule on every run. Keep it inline.
+  dynamic "ingress" {
+    for_each = var.enable_bastion ? [1] : []
+    content {
+      description     = "Postgres from the SSH bastion (port-forward for data loads and the dashboard)."
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [aws_security_group.bastion[0].id]
+    }
   }
 
   egress {
@@ -109,20 +130,26 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   tags                = merge(local.common_tags, { Name = "${local.name_prefix}-sm-vpce" })
 }
 
-# --- Outbound internet access for the LSQ push ----------------------------
-# The lsq_push stage calls a third-party API, which no VPC endpoint can serve.
-# Without a route out, the call hangs until the function times out. NAT is the
-# only option for an in-VPC function, and it is billed hourly, so it is gated
-# behind a variable: leave it off while using the mock endpoint, switch it on
-# when pointing at a real LSQ sandbox.
+# --- Public network scaffolding --------------------------------------------
+# An internet gateway, public subnets and a public route table, created when
+# either optional feature needs them (local.need_public_network):
+#
+#   * enable_nat_gateway - the lsq_push stage calls a third-party API, which no
+#     VPC endpoint can serve. Without a route out, the call hangs until the
+#     function times out. NAT is the only option for an in-VPC function.
+#   * enable_bastion - the jump host needs a public IP and a default route so a
+#     laptop can SSH in and forward a port to private RDS.
+#
+# The NAT gateway and its Elastic IP stay gated on enable_nat_gateway alone,
+# below: the bastion needs an IGW, not NAT, and NAT is the part billed hourly.
 resource "aws_internet_gateway" "main" {
-  count  = var.enable_nat_gateway ? 1 : 0
+  count  = local.need_public_network ? 1 : 0
   vpc_id = aws_vpc.main.id
   tags   = merge(local.common_tags, { Name = "${local.name_prefix}-igw" })
 }
 
 resource "aws_subnet" "public" {
-  count             = var.enable_nat_gateway ? var.az_count : 0
+  count             = local.need_public_network ? var.az_count : 0
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.public_subnet_cidrs[count.index]
   availability_zone = local.azs[count.index]
@@ -133,7 +160,7 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_route_table" "public" {
-  count  = var.enable_nat_gateway ? 1 : 0
+  count  = local.need_public_network ? 1 : 0
   vpc_id = aws_vpc.main.id
 
   route {
@@ -145,10 +172,14 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
-  count          = var.enable_nat_gateway ? var.az_count : 0
+  count          = local.need_public_network ? var.az_count : 0
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public[0].id
 }
+
+# --- Outbound internet access for the LSQ push ----------------------------
+# Billed hourly, so gated on enable_nat_gateway only: leave it off while using
+# the mock endpoint, switch it on when pointing at a real LSQ sandbox.
 
 resource "aws_eip" "nat" {
   count  = var.enable_nat_gateway ? 1 : 0
