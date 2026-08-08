@@ -13,8 +13,14 @@ Two input formats are accepted and auto-detected per file:
 
 Defaults point at the real dataset filenames.
 
+Real datasets are de-identified on the way in (rep names become ``Agent-NNNN``
+labels, CRM ids become salted hashes) because the demo account must not hold
+personal data. Set ``ANONYMIZE_REAL_DATA=0`` for a production load that needs the
+real ProspectID for the LSQ write-back - see ``data.adapt_real_data``.
+
 Usage:
     python scripts/load_sample_data.py
+    ANONYMIZE_REAL_DATA=0 python scripts/load_sample_data.py   # keep real CRM ids
     python scripts/load_sample_data.py --history-csv path/to/history.csv --leads-csv path/to/leads.csv
 """
 from __future__ import annotations

@@ -40,7 +40,13 @@ from shared.model_io import (  # noqa: E402
     save_artifact,
 )
 
-HISTORY_QUERY = "SELECT * FROM lead_manager_history"
+# ORDER BY is not cosmetic: an unordered SELECT returns rows in heap order, which
+# is not stable across reloads (narrower rows pack differently, so page layout -
+# and therefore row order - changes). ``train_test_split`` slices positionally,
+# so the held-out set silently changed on every reload, moving precision by
+# whole points on a test set with only ~15 positives. Ordering by the insertion
+# key makes a training run reproducible from the same data.
+HISTORY_QUERY = "SELECT * FROM lead_manager_history ORDER BY id"
 
 
 def _default_n_jobs() -> int:
