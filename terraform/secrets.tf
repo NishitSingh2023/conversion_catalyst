@@ -26,8 +26,9 @@ resource "aws_secretsmanager_secret_version" "db" {
   })
 }
 
-# LSQ API key. Created empty; the real key is populated out-of-band (never in
-# source control). The lsq_push Lambda reads it via LSQ_SECRET_ARN.
+# LSQ API credentials. Created with placeholders; the real values are populated
+# out-of-band (never in source control). The lsq_push Lambda reads them via
+# LSQ_SECRET_ARN. The bulk update endpoint needs BOTH accessKey and secretKey.
 resource "aws_secretsmanager_secret" "lsq" {
   name        = "${local.name_prefix}/lsq-api"
   description = "LSQ bulk API credentials."
@@ -42,8 +43,9 @@ resource "aws_secretsmanager_secret" "lsq" {
 resource "aws_secretsmanager_secret_version" "lsq" {
   secret_id = aws_secretsmanager_secret.lsq.id
   secret_string = jsonencode({
-    api_key  = "REPLACE_ME_OUT_OF_BAND"
-    base_url = var.lsq_api_base_url
+    api_key    = "REPLACE_ME_OUT_OF_BAND"
+    secret_key = "REPLACE_ME_OUT_OF_BAND"
+    base_url   = var.lsq_api_base_url
   })
 
   lifecycle {

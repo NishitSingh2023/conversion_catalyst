@@ -175,12 +175,13 @@ secrets and log groups do not collide.
 - **RDS is private.** No public accessibility and ingress only from the Lambda
   security group. Migrations therefore go through the `migrate` function.
 - **Egress is opt-in.** `enable_nat_gateway` defaults to `false`, so there is no
-  route to the internet and no hourly NAT charge. That is safe with the default
-  `lsq_api_base_url`, because `lsq_push` recognises the `.local` sentinel and
-  simulates the push, marking records pushed and logging the payload. Pointing
-  `lsq_api_base_url` at a live sandbox without also setting
-  `enable_nat_gateway = true` is the broken combination: the call has nowhere to
-  go and each batch stalls for the 30s HTTP timeout.
+  route to the internet and no hourly NAT charge. That is safe regardless of
+  `lsq_api_base_url`, because `lsq_push` simulates the push unless
+  `LSQ_LIVE_PUSH=1` is set explicitly, marking records pushed and logging the
+  body that would have been sent. A live push needs both that opt-in and
+  `enable_nat_gateway = true`; setting the opt-in alone is the broken
+  combination, where the call has nowhere to go and each group stalls for the
+  30s HTTP timeout.
 - **Laptop access is opt-in, via a bastion.** Two things have to reach Postgres
   from outside AWS: loading the sample CSVs (`data/sample/` is in
   `.dockerignore`, so the image carries none, and `train` fails with

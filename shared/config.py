@@ -38,7 +38,9 @@ class AppConfig:
     database: DatabaseConfig
     model_bucket: str
     lsq_api_base_url: str
+    # LSQ authenticates every bulk call with BOTH an access key and a secret key.
     lsq_api_key: str
+    lsq_secret_key: str
     aws_region: str
     environment: str
 
@@ -86,6 +88,15 @@ def _resolve_lsq_key() -> str:
     return os.getenv("LSQ_API_KEY", "mock-lsq-api-key")
 
 
+def _resolve_lsq_secret_key() -> str:
+    """The second half of the LSQ credential pair (``secretKey`` query param)."""
+    secret_arn = os.getenv("LSQ_SECRET_ARN")
+    if secret_arn:
+        secret = _load_secret_json(secret_arn)
+        return secret.get("secret_key", "")
+    return os.getenv("LSQ_SECRET_KEY", "mock-lsq-secret-key")
+
+
 @lru_cache(maxsize=1)
 def get_config() -> AppConfig:
     """Return the cached application configuration."""
@@ -94,6 +105,7 @@ def get_config() -> AppConfig:
         model_bucket=os.getenv("MODEL_BUCKET", "lead-assignment-models-dev"),
         lsq_api_base_url=os.getenv("LSQ_API_BASE_URL", "https://mock-lsq.local/api"),
         lsq_api_key=_resolve_lsq_key(),
+        lsq_secret_key=_resolve_lsq_secret_key(),
         # Same reasoning as _load_secret_json: env var wins, and the fallback is
         # Oregon because that is the only region the lab account can reach.
         aws_region=os.getenv("AWS_REGION", "us-west-2"),

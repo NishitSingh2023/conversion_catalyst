@@ -17,7 +17,11 @@ reads as "no intent signal" instead of "bad data".
 
 Event shape (all optional)::
 
-    {"batch_id": "2026-08-07", "run_id": "run-...", "business_date": "2026-08-07"}
+    {"batch_id": "2026-08-07", "run_id": "run-...", "business_date": "2026-08-07",
+     "reset_business_date": false}
+
+``reset_business_date`` is a demo-only escape hatch - see
+:func:`reset_business_date`. It defaults to off and is never applied implicitly.
 """
 from __future__ import annotations
 
@@ -53,6 +57,23 @@ SET is_valid = (validation_error IS NULL)
 WHERE batch_id = :batch_id
 """
 
+# --- Business-date reset (demo only) --------------------------------------
+# Pool rows carry no business_date of their own, so they are scoped two ways:
+# a claimed row consumes capacity on claimed_at::date (exactly how
+# manager_daily_load counts it), and the remaining rows belong to a run whose
+# assignments are dated to the target day. Both are restricted to the one date.
+_RESET_POOL = """
+DELETE FROM pool p
+WHERE p.claimed_at::date = :business_date
+   OR p.run_id IN (
+        SELECT run_id FROM assignments WHERE business_date = :business_date
+      )
+"""
+
+_RESET_ASSIGNMENTS = """
+DELETE FROM assignments WHERE business_date = :business_date
+"""
+
 
 def _validate_sql() -> str:
     # One WHEN per required field, checking null and blank in the same pass.
@@ -60,6 +81,37 @@ def _validate_sql() -> str:
         f"WHEN {f} IS NULL OR btrim({f}) = '' THEN 'missing_{f}'" for f in REQUIRED_FIELDS
     )
     return _VALIDATE.format(missing_cases=cases)
+
+
+def reset_business_date(business_date: str) -> dict:
+    """Delete every assignment and pool row for ``business_date``. DESTRUCTIVE.
+
+    Capacity is keyed on the business date, so a second run on the same date
+    correctly sees the first run's 471 assignments as load already held and
+    places fewer leads - by the third run a chunk of the team sits at the
+    50-lead cap. That is right for a nightly job and wrong for a demo, where a
+    re-run should reproduce the same numbers.
+
+    This exists ONLY to make a demo repeatable and MUST NOT be used in
+    production: it erases the audit trail of what was already assigned today,
+    and any of those leads already pushed to the CRM stay assigned there while
+    the record here is gone. It is opt-in per invocation
+    (``{"reset_business_date": true}``), never implicit, and touches no other
+    date's data.
+    """
+    with get_engine().begin() as conn:
+        # Pool first: its scoping reads the assignments rows deleted below.
+        pool_deleted = conn.execute(text(_RESET_POOL), {"business_date": business_date}).rowcount
+        assignments_deleted = conn.execute(
+            text(_RESET_ASSIGNMENTS), {"business_date": business_date}
+        ).rowcount
+
+    logger.warning(
+        "reset_business_date=%s DELETED assignments=%s pool=%s "
+        "(destructive, demo-only capacity reset)",
+        business_date, assignments_deleted, pool_deleted,
+    )
+    return {"assignments_deleted": int(assignments_deleted), "pool_deleted": int(pool_deleted)}
 
 
 def _latest_batch_id() -> str | None:
@@ -114,6 +166,21 @@ def lambda_handler(event: dict | None = None, context=None) -> dict:
         if not batch_id:
             raise RuntimeError("no batch_id supplied and new_leads has no batches to process")
 
+        # Business date owns the capacity window for every later stage. Pinned
+        # here so a retry crossing midnight UTC still counts against this run's
+        # day rather than resetting every manager's load to zero.
+        business_date = event.get("business_date") or str(
+            read_sql("SELECT current_date AS d").iloc[0]["d"]
+        )
+
+        # Opt-in, destructive, demo-only: clear this date's capacity window so a
+        # re-run reproduces the first run's numbers. Off unless the event asks.
+        reset_stats = (
+            reset_business_date(business_date)
+            if event.get("reset_business_date") is True
+            else None
+        )
+
         stats = validate_batch(batch_id)
         if stats["valid"] == 0:
             raise RuntimeError(f"batch {batch_id} has no valid leads (stats={stats})")
@@ -121,13 +188,6 @@ def lambda_handler(event: dict | None = None, context=None) -> dict:
         # Manager attributes are derived from history, so refresh before the
         # eligibility and scoring stages read them.
         profiles_written = refresh_manager_profiles()
-
-        # Business date owns the capacity window for every later stage. Pinned
-        # here so a retry crossing midnight UTC still counts against this run's
-        # day rather than resetting every manager's load to zero.
-        business_date = event.get("business_date") or str(
-            read_sql("SELECT current_date AS d").iloc[0]["d"]
-        )
 
         update_run(
             run_id,
@@ -150,6 +210,7 @@ def lambda_handler(event: dict | None = None, context=None) -> dict:
             "leads_invalid": stats["invalid"],
             "invalid_reasons": stats["invalid_reasons"],
             "manager_profiles": profiles_written,
+            **({"reset": reset_stats} if reset_stats else {}),
         }
     except Exception as exc:
         logger.exception("ingest failed for run %s", run_id)
