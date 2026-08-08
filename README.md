@@ -164,6 +164,14 @@ secrets and log groups do not collide.
   model, reaches 249MB from scipy/pandas/numpy. One image serves all stages and
   each function selects its entrypoint via a CMD override, so no stage can drift
   onto different library versions than the one training used.
+- **The image must be a Docker v2 schema 2 manifest.** Lambda rejects an OCI
+  image index, which is what current Docker/buildx produces by default because it
+  attaches provenance and SBOM attestations alongside the image. The symptom is
+  every function failing to create with `InvalidParameterValueException: The image
+  manifest, config or layer media type ... is not supported`.
+  `build_and_push.sh` builds with attestations off and OCI media types disabled,
+  then reads the manifest back from ECR and exits non-zero if it is the wrong
+  media type.
 - **RDS is private.** No public accessibility and ingress only from the Lambda
   security group. Migrations therefore go through the `migrate` function.
 - **Egress is opt-in.** `enable_nat_gateway` defaults to `false`, so there is no

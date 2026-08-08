@@ -40,12 +40,74 @@ aws ecr describe-repositories --repository-names "${REPO_NAME}" --region "${REGI
 echo "==> Logging in to ${REGISTRY}"
 aws ecr get-login-password --region "${REGION}" | docker login --username AWS --password-stdin "${REGISTRY}"
 
-echo "==> Building ${IMAGE}"
-# Lambda runs x86_64; force the platform so arm64 laptops produce a usable image.
-docker build --platform linux/amd64 -t "${IMAGE}" "${REPO_ROOT}"
+# buildx carries the flags below that keep the image in a shape Lambda accepts.
+# Plain `docker build` on an older daemon without the plugin cannot express them,
+# so stop here rather than push an image the functions will reject.
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "ERROR: docker buildx is not available." >&2
+  echo "Upgrade Docker (buildx ships with Docker 23+) or install the buildx plugin," >&2
+  echo "e.g. 'apt install docker-buildx-plugin', then re-run this script." >&2
+  exit 1
+fi
 
-echo "==> Pushing ${IMAGE}"
-docker push "${IMAGE}"
+echo "==> Building and pushing ${IMAGE}"
+# Lambda runs x86_64; force the platform so arm64 laptops produce a usable image.
+#
+# The three extra flags exist because Docker 29 / buildx 0.35 defaults produce an
+# artifact Lambda refuses. By default buildx publishes an OCI image index holding
+# a provenance/SBOM attestation manifest next to the real image, while Lambda
+# accepts only a single-platform Docker Image Manifest V2 Schema 2 with no
+# attestations. Getting this wrong fails CreateFunction/UpdateFunctionCode for
+# every function with "InvalidParameterValueException: The image manifest, config
+# or layer media type for the source image is not supported", which reads like a
+# broken image rather than a packaging default.
+#   --provenance=false --sbom=false  drop the attestation manifest, so the index
+#                                    has nothing to wrap
+#   oci-mediatypes=false             emit Docker v2 schema 2 media types instead
+#                                    of the OCI equivalents
+# push=true publishes from the same invocation, so there is no separate
+# `docker push` that could re-wrap the result.
+docker buildx build --platform linux/amd64 \
+  --provenance=false --sbom=false \
+  --output "type=image,name=${IMAGE},oci-mediatypes=false,push=true" \
+  "${REPO_ROOT}"
+
+echo "==> Verifying pushed manifest media type"
+# Read the manifest back out of ECR rather than trusting the build flags. This is
+# the guard against the failure above reappearing silently after a Docker or
+# buildx upgrade changes a default: better to fail here than during apply.
+EXPECTED_MEDIA_TYPE="application/vnd.docker.distribution.manifest.v2+json"
+MANIFEST="$(aws ecr batch-get-image \
+  --repository-name "${REPO_NAME}" \
+  --image-ids imageTag="${IMAGE_TAG}" \
+  --region "${REGION}" \
+  --query 'images[0].imageManifest' \
+  --output text)"
+# ECR hands back the manifest pretty-printed, so the top-level mediaType is the
+# one indented by two spaces; the deeper matches are the config and layer types.
+# The unanchored match is the fallback for a compact manifest, where the first
+# mediaType is still the manifest's own (an OCI index reports its index type
+# there, which is exactly what this check needs to see).
+ACTUAL_MEDIA_TYPE="$(printf '%s\n' "${MANIFEST}" \
+  | grep -o '^  "mediaType"[[:space:]]*:[[:space:]]*"[^"]*"' \
+  | head -n 1 \
+  | sed 's/.*"\([^"]*\)"$/\1/')"
+if [ -z "${ACTUAL_MEDIA_TYPE}" ]; then
+  ACTUAL_MEDIA_TYPE="$(printf '%s\n' "${MANIFEST}" \
+    | grep -o '"mediaType"[[:space:]]*:[[:space:]]*"[^"]*"' \
+    | head -n 1 \
+    | sed 's/.*"\([^"]*\)"$/\1/')"
+fi
+
+if [ "${ACTUAL_MEDIA_TYPE}" != "${EXPECTED_MEDIA_TYPE}" ]; then
+  echo "ERROR: ${IMAGE} has manifest media type '${ACTUAL_MEDIA_TYPE}'," >&2
+  echo "       expected '${EXPECTED_MEDIA_TYPE}'." >&2
+  echo "Lambda will reject this image with InvalidParameterValueException." >&2
+  echo "An OCI image index means the attestation/OCI-media-type flags above did" >&2
+  echo "not take effect; check the docker and buildx versions in use." >&2
+  exit 1
+fi
+echo "    ${ACTUAL_MEDIA_TYPE}"
 
 echo
 echo "Image pushed. Deploy with:"
